@@ -1,0 +1,82 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"google.golang.org/protobuf/encoding/protojson"
+
+	kk "github.com/kriptakey/kk-go-sdk/kriptakey"
+	kkreq "github.com/kriptakey/kk-go-sdk/kriptakey/request"
+)
+
+func main() {
+
+	// Change these constants to the actual value in your environment
+	DEMO_HOSTNAME := "target-kk-cs.com"
+	DEMO_PORT := 8084
+
+	DEMO_SLOT_ID := 1
+	DEMO_SLOT_PASSWORD := "Password1!"
+
+	DEMO_CLIENT_CERTIFICATE := "/PathToClient/Cert.pem"
+	DEMO_CLIENT_PRIVATE_KEY := "/PathToClientKey/Priv.key"
+	DEMO_CA_CERTIFICATE := "/PathToClient/Cert.pem"
+
+	DEMO_WRAPPING_KEY_ID := "WrappingKey"
+	DEMO_WRAPPED_KEY := "UAHIdhiahebUHAD2n8bjd1IHGGalheaubfa98l=="
+
+	connection, err := kk.InitializeConnection(DEMO_HOSTNAME, uint16(DEMO_PORT), DEMO_CLIENT_CERTIFICATE, DEMO_CLIENT_PRIVATE_KEY, DEMO_CA_CERTIFICATE)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+
+	session, err := connection.Login(uint32(DEMO_SLOT_ID), DEMO_SLOT_PASSWORD)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+	fmt.Println("- Session: ", protojson.Format(session))
+
+	var tokenizeRequest kkreq.APIRequest_Tokenize
+	var plaintexts []*kkreq.APIRequest_SingleTokenize
+
+	singleEncrypt := kkreq.APIRequest_SingleTokenize{Text: "4281 5790 7311 2819", FormatChar: "$$$$%%%%%%%%%%%$$$$", TokenizedWith: kkreq.TokenizeType_CIPHER}
+	plaintexts = append(plaintexts, &singleEncrypt)
+
+	tokenizeRequest.Text = plaintexts
+
+	encrypted, err := connection.ExternalTokenize(1, session.SessionToken, DEMO_WRAPPING_KEY_ID, DEMO_WRAPPED_KEY, &tokenizeRequest)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+	fmt.Println("- Tokenize: ", protojson.Format(encrypted))
+
+	var detokenizeRequest kkreq.APIRequest_Detokenize
+	var ciphertexts []*kkreq.APIRequest_SingleDetokenize
+
+	for _, _ciphertext := range encrypted.Ciphertext {
+		singleDecrypt := kkreq.APIRequest_SingleDetokenize{Token: _ciphertext.Token, Metadata: _ciphertext.Metadata}
+		ciphertexts = append(ciphertexts, &singleDecrypt)
+	}
+	detokenizeRequest.Token = ciphertexts
+	decrypted, err := connection.ExternalDetokenize(1, session.SessionToken, DEMO_WRAPPING_KEY_ID, DEMO_WRAPPED_KEY, &detokenizeRequest)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+
+	fmt.Println("- Detokenize: ", protojson.Format(decrypted))
+
+}
