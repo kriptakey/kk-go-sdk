@@ -1283,7 +1283,7 @@ func (x *ConnectionHandler) ExternalVerifyDigest(slotId uint32, sessionToken str
 	return instance, err
 }
 
-func SealForTransit(plaintext []byte, publicKeyOrCert string) ([]byte, error) {
+func (x *ConnectionHandler) SealForTransit(plaintext []byte, publicKeyOrCert string) ([]byte, error) {
 	array := []byte{}
 	allocPtr := unsafe.Pointer(&array)
 
