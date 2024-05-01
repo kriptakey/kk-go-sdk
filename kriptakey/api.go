@@ -163,6 +163,11 @@ SG_FAULTCODE_T kk_nativesdk_fileDecrypt(OpaqueConnectionHandlerPtr const connect
 	uint8_t const* ivVec, size_t ivSize, uint8_t const* tagVec,
 	size_t tagSize, char const* plaintextInputFilePath,
 	char const* ciphertextOutputFilePath);
+SG_FAULTCODE_T kk_nativesdk_sealForTransit(uint8_t const* plaintext, size_t plaintextSize, char const* publicKeyOrCert, OpaqueOutputPtr allocatedPtr,
+	AssignerCallback callback);
+SG_FAULTCODE_T kk_nativesdk_unsealDataFromTransit(OpaqueConnectionHandlerPtr const connectionData, uint32_t slotId,
+	char const* sessionToken, char const* wrappingKeyId, char const* wrappedPrivateKey, uint8_t const* ciphertext, size_t ciphertextSize, OpaqueOutputPtr allocatedPtr,
+	AssignerCallback callback);
 SG_FAULTCODE_T kk_nativesdk_fileGenerateHMAC(OpaqueConnectionHandlerPtr const connectionData, uint32_t slotId,
 	char const* sessionToken, char const* keyId,
 	char const* inputFilePath, OpaqueOutputPtr allocatedPtr,
@@ -180,6 +185,7 @@ import (
 	"unsafe"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	kkreq "github.com/kriptakey/kk-go-sdk/kriptakey/request"
 	kkresp "github.com/kriptakey/kk-go-sdk/kriptakey/response"
 )
@@ -1275,4 +1281,53 @@ func (x *ConnectionHandler) ExternalVerifyDigest(slotId uint32, sessionToken str
 	instance := &kkresp.APIResponse_ExternalVerify{}
 	err := proto.Unmarshal(array, instance)
 	return instance, err
+}
+
+func SealForTransit(plaintext []byte, publicKeyOrCert string) ([]byte, error) {
+	array := []byte{}
+	allocPtr := unsafe.Pointer(&array)
+
+	c_publicKeyOrCert := C.CString(publicKeyOrCert)
+	defer C.free(unsafe.Pointer(c_publicKeyOrCert))
+
+	ret := C.kk_nativesdk_sealForTransit((*C.uchar)(unsafe.Pointer(&plaintext[0])), C.ulong(len(plaintext)), c_publicKeyOrCert, C.OpaqueOutputPtr(allocPtr), C.AssignerCallback(C.kk_gosdk_assign))
+	if ret != 1 {
+		return nil, newFaultCode(uint(ret))
+	}
+
+	instance := &wrapperspb.BytesValue{}
+	err := proto.Unmarshal(array, instance)
+
+	runtime.KeepAlive(plaintext)
+	runtime.KeepAlive(array)
+	runtime.KeepAlive(allocPtr)
+
+	return instance.GetValue(), err
+}
+
+func (x *ConnectionHandler) UnsealDataFromTransit(slotId uint32, sessionToken string, wrappingKeyId string, wrappedPrivateKey string, ciphertext []byte) ([]byte, error) {
+	array := []byte{}
+	allocPtr := unsafe.Pointer(&array)
+
+	c_sessionToken := C.CString(sessionToken)
+	defer C.free(unsafe.Pointer(c_sessionToken))
+	c_wrappingKeyId := C.CString(wrappingKeyId)
+	defer C.free(unsafe.Pointer(c_wrappingKeyId))
+	c_wrappedPrivateKey := C.CString(wrappedPrivateKey)
+	defer C.free(unsafe.Pointer(c_wrappedPrivateKey))
+
+	ret := C.kk_nativesdk_unsealDataFromTransit(*x.handler, C.uint(slotId), c_sessionToken, c_wrappingKeyId, c_wrappedPrivateKey, (*C.uchar)(unsafe.Pointer(&ciphertext[0])), C.ulong(len(ciphertext)), C.OpaqueOutputPtr(allocPtr), C.AssignerCallback(C.kk_gosdk_assign))
+	if ret != 1 {
+		return nil, newFaultCode(uint(ret))
+	}
+
+	instance := &wrapperspb.BytesValue{}
+	err := proto.Unmarshal(array, instance)
+
+	runtime.KeepAlive(ciphertext)
+	runtime.KeepAlive(array)
+	runtime.KeepAlive(allocPtr)
+	runtime.KeepAlive(x)
+
+	return instance.GetValue(), err
 }
